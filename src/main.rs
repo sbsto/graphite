@@ -1,6 +1,6 @@
 use std::string::FromUtf8Error;
 
-use rocksdb::{TransactionDB, Error as RocksError, Options, DB};
+use rocksdb::{TransactionDB, Error as RocksError, Options, DB, ColumnFamilyDescriptor, TransactionDBOptions};
 use serde::{Serialize, Deserialize};
 use serde_json::{Error as SerdeError};
 use xid;
@@ -129,9 +129,26 @@ impl std::fmt::Display for GraphError {
 
 impl Graph {
 	pub fn new(path: &str) -> Result<Graph, GraphError> {
-		let db = TransactionDB::open_default(path)?;
-		let path = path.to_string();
-		Ok(Graph { db, path })
+    let options = Options::default();
+    let txn_db_options = TransactionDBOptions::default();
+
+    let cfs = match DB::list_cf(&options, path) {
+			Ok(cfs) => cfs,
+			Err(_) => Vec::new(), // If there are no existing column families
+    };
+
+    let mut cf_descriptors = Vec::new();
+    for cf in cfs {
+        cf_descriptors.push(ColumnFamilyDescriptor::new(cf, Options::default()));
+    }
+
+    let db = match cf_descriptors.is_empty() {
+        true => TransactionDB::open(&options, &txn_db_options, path)?,
+        false => TransactionDB::open_cf_descriptors(&options, &txn_db_options, path, cf_descriptors)?,
+    };
+
+    let path = path.to_string();
+    Ok(Graph { db, path })
 	}
 
 	pub fn add_node<T>(&self, node: T) -> Result<T, GraphError> where T: IceNode + Serialize {
@@ -189,13 +206,13 @@ impl Graph {
 		let node_family = self.db.cf_handle(&node_family_name).ok_or(GraphError::NodeFamilyError)?;
 
 		let node_payload: Result<T, GraphError> = match self.db.get_cf(&node_family, &from_node_id) {
-				Ok(Some(value)) => {
-					let mut node_payload = serde_json::from_slice::<T>(&value)?;
-					node_payload.nbs_mut().push(to_node_id.to_string());
-					Ok(node_payload)
-				}
-				Ok(None) => Err(GraphError::FindKeyError),
-				Err(e) => Err(GraphError::RocksError(e)),
+			Ok(Some(value)) => {
+				let mut node_payload = serde_json::from_slice::<T>(&value)?;
+				node_payload.nbs_mut().push(to_node_id.to_string());
+				Ok(node_payload)
+			}
+			Ok(None) => Err(GraphError::FindKeyError),
+			Err(e) => Err(GraphError::RocksError(e)),
 		};
 
 		let txn = self.db.transaction();
@@ -271,7 +288,6 @@ impl Graph {
 
 	pub fn display(&self) -> Result<(), GraphError> {
     let node_families = DB::list_cf(&Options::default(), &self.path)?;
-
     for node_family_name in node_families {
 			let node_family = self
 				.db
@@ -310,17 +326,18 @@ fn main() {
 
 	// graph.destroy_everything();
 
-	// let node = SomeNodeType::new(None, "here's some data".to_string(), "here's some mutable data".to_string());
-	// let node2 = SomeNodeType::new(None, "here's some data".to_string(), "here's some mutable data".to_string());
+	let node = SomeNodeType::new(None, "here's some data".to_string(), "here's some mutable data".to_string());
+	let node2 = SomeNodeType::new(None, "here's some data".to_string(), "here's some mutable data".to_string());
 	// graph.add_node(node);
 	// graph.add_node(node2);
 	// graph.add_edge::<SomeNodeType>("SomeNodeType:ch9ffidtkb86cnhgiq9g", "SomeNodeType:ch9ffidtkb86cnhgiqa0").unwrap();
 
 	// let mut node =  graph.get_node::<SomeNodeType>("SomeNodeType:ch9ffidtkb86cnhgiq9g").unwrap();
 	// let adjs = graph.get_adjacents::<SomeNodeType>("SomeNodeType:ch9ffidtkb86cnhgiq9g").unwrap();
-	let _ = graph.remove_node("SomeNodeType:ch9ffidtkb86cnhgiq9g");
+	// let _ = graph.remove_node("SomeNodeType:ch9ffidtkb86cnhgiq9g");
 
 	// graph.update_node(&node).unwrap();
 	// println!("{:?}", adjs);
+
 	graph.display().unwrap();
 }
