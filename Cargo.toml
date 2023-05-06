@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-paste = "1.0.12"
-rocksdb = { version ="0.20.1", features = ["multi-threaded-cf"] }
-serde = { version = "1.0.160", features = ["derive"] }
+icy = { path = "./icy" }
+serde = "1.0.162"
 serde_json = "1.0.96"
 xid = "1.0.3"

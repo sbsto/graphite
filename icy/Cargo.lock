@@ -118,16 +118,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "icegraph"
-version = "0.1.0"
-dependencies = [
- "icy",
- "serde",
- "serde_json",
- "xid",
-]
-
-[[package]]
 name = "icy"
 version = "0.1.0"
 dependencies = [
