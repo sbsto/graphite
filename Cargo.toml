@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 icy = { path = "./icy" }
+rayon = "1.7.0"
 serde = "1.0.162"
 serde_json = "1.0.96"
 xid = "1.0.3"

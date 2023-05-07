@@ -1,11 +1,11 @@
-use std::string::FromUtf8Error;
-use rocksdb::{TransactionDB, Options, Error as RocksError, ColumnFamilyDescriptor, TransactionDBOptions, DB};
+use std::{string::FromUtf8Error, sync::Arc, thread::Thread};
+use rocksdb::{TransactionDB, Options, Error as RocksError, ColumnFamilyDescriptor, TransactionDBOptions, DB, MultiThreaded};
 use serde_json::Error as SerdeError;
 
 pub use serde::{Serialize, Deserialize};
 pub use xid;
 
-pub trait IceNode: Serialize + for<'de> Deserialize<'de> + Clone {
+pub trait IceNode: Serialize + for<'de> Deserialize<'de> + Clone + Send {
 	fn id(&self) -> &str;
 	fn nbs(&self) -> &Vec<String>;
 	fn nbs_mut(&mut self) -> &mut Vec<String>;
@@ -15,69 +15,73 @@ pub trait IceNode: Serialize + for<'de> Deserialize<'de> + Clone {
 #[macro_export]
 macro_rules! create_node_struct {
 	($struct_name:ident {
-			$($field_name:ident: $field_type:ty),* $(,)?
+		$($field_name:ident: $field_type:ty),* $(,)?
 	}) => {
-			#[derive(Debug, Serialize, Deserialize, Clone)]
-			pub struct $struct_name {
-					id: String,
-					nbs: Vec<String>,
-					$($field_name: $field_type),*,
+		#[derive(Debug, Serialize, Deserialize, Clone)]
+		pub struct $struct_name {
+			id: String,
+			nbs: Vec<String>,
+			$($field_name: $field_type),*,
+		}
+
+		impl $struct_name {
+			pub fn new(id: Option<String>, $($field_name: $field_type,)*) -> Self {
+				Self {
+					id: format!(concat!(stringify!($struct_name), ":{}"), id.unwrap_or_else(|| xid::new().to_string())),
+					nbs: Vec::new(),
+					$($field_name),*,
+				}
+			}
+		}
+
+		impl std::str::FromStr for $struct_name {
+			type Err = serde_json::Error;
+
+			fn from_str(s: &str) -> Result<Self, Self::Err> {
+				serde_json::from_str::<Self>(s)
+			}
+		}
+
+		impl IceNode for $struct_name {
+			fn id(&self) -> &str {
+				&self.id
 			}
 
-			impl $struct_name {
-					pub fn new(id: Option<String>, $($field_name: $field_type,)*) -> Self {
-							Self {
-									id: format!(concat!(stringify!($struct_name), ":{}"), id.unwrap_or_else(|| xid::new().to_string())),
-									nbs: Vec::new(),
-									$($field_name),*,
-							}
-					}
+			fn nbs(&self) -> &Vec<String> {
+				&self.nbs
 			}
 
-			impl std::str::FromStr for $struct_name {
-					type Err = serde_json::Error;
-
-					fn from_str(s: &str) -> Result<Self, Self::Err> {
-							serde_json::from_str::<Self>(s)
-					}
+			fn nbs_mut(&mut self) -> &mut Vec<String> {
+				&mut self.nbs
 			}
 
-			impl IceNode for $struct_name {
-					fn id(&self) -> &str {
-							&self.id
-					}
-
-					fn nbs(&self) -> &Vec<String> {
-							&self.nbs
-					}
-
-					fn nbs_mut(&mut self) -> &mut Vec<String> {
-							&mut self.nbs
-					}
-
-					fn family_name(&self) -> Option<String> {
-							Some(stringify!($struct_name).to_string())
-					}
+			fn family_name(&self) -> Option<String> {
+				Some(stringify!($struct_name).to_string())
 			}
+		}
 	};
 }
 
 pub struct Graph {
-  db: TransactionDB,
-	path: String
+  db: Arc<TransactionDB<MultiThreaded>>,
+	path: String,
 }
 
 pub trait GraphOperations {
-	fn create_node_family(&mut self, family_name: &str);
+	fn create_node_family(&mut self, family_name: &str) -> Result<(), GraphError>;
 }
 
 impl GraphOperations for Graph {
-	fn create_node_family(&mut self, family_name: &str) {
+	fn create_node_family(&mut self, family_name: &str) -> Result<(), GraphError> {
 		// Check if the column family already exists
 		if self.db.cf_handle(family_name).is_none() {
 			let options = Options::default();
-			self.db.create_cf(family_name, &options).unwrap();
+			self.db
+				.create_cf(family_name, &options)
+				.map_err(|_| GraphError::NodeFamilyError)?;
 		}
+
+		Ok(())
 	}
 }
 
@@ -126,8 +130,10 @@ impl std::fmt::Display for GraphError {
 
 impl Graph {
 	pub fn new(path: &str) -> Result<Graph, GraphError> {
-    let options = Options::default();
+    let mut options = Options::default();
     let txn_db_options = TransactionDBOptions::default();
+
+		options.increase_parallelism(1);
 
     let cfs = match DB::list_cf(&options, path) {
 			Ok(cfs) => cfs,
@@ -139,32 +145,37 @@ impl Graph {
         cf_descriptors.push(ColumnFamilyDescriptor::new(cf, Options::default()));
     }
 
-    let db = match cf_descriptors.is_empty() {
+    let db: TransactionDB<MultiThreaded> = match cf_descriptors.is_empty() {
         true => TransactionDB::open(&options, &txn_db_options, path)?,
         false => TransactionDB::open_cf_descriptors(&options, &txn_db_options, path, cf_descriptors)?,
     };
 
     let path = path.to_string();
-    Ok(Graph { db, path })
+
+    Ok(Graph { db: Arc::new(db), path })
 	}
 
-	pub fn add_node<T>(&mut self, node: T) -> Result<T, GraphError> where T: IceNode + Serialize {
+	pub fn add_node<T>(&self, node: T) -> Result<T, GraphError>
+	where
+		T: IceNode + Send + 'static,
+	{
+    let db = Arc::clone(&self.db);
     let node_family_name = node.family_name().ok_or(GraphError::NodeFamilyError)?;
+		if db.cf_handle(&node_family_name).is_none() {
+			let options = Options::default();
+			db
+				.create_cf(&node_family_name, &options)
+				.map_err(|_| GraphError::NodeFamilyError)?;
+		}
 
-    // Check if the column family exists, and create it if not
-    if self.db.cf_handle(&node_family_name).is_none() {
-        self.create_node_family(&node_family_name);
-    }
+		let node_family = db
+			.cf_handle(&node_family_name)
+			.ok_or(GraphError::NodeFamilyError)?;
 
-    let node_family = self
-        .db
-        .cf_handle(&node_family_name)
-        .ok_or(GraphError::NodeFamilyError)?;
-
-    let txn: rocksdb::Transaction<TransactionDB> = self.db.transaction();
-    txn.put_cf(&node_family, format!("{}", node.id()), serde_json::to_string(&node)?)?;
-    txn.commit()?;
-    Ok(node)
+		let txn: rocksdb::Transaction<TransactionDB<MultiThreaded>> = db.transaction();
+		txn.put_cf(&node_family, format!("{}", node.id()), serde_json::to_string(&node)?)?;
+		txn.commit()?;
+		Ok(node)
 	}
 
 	pub fn get_node<T>(&self, node_id: &str) -> Result<T, GraphError> 
@@ -321,5 +332,28 @@ impl Graph {
     }
 
     Ok(())
+	}
+
+	pub fn count_nodes(&self) -> Result<usize, GraphError> {
+		let node_families = DB::list_cf(&Options::default(), &self.path)?;
+		let mut count = 0;
+
+		for node_family_name in node_families {
+			let node_family = self
+				.db
+				.cf_handle(&node_family_name)
+				.ok_or(GraphError::NodeFamilyError)?;
+
+			let records = self.db.iterator_cf(&node_family, rocksdb::IteratorMode::Start);
+
+			for record in records {
+				match record {
+					Ok(_) => count += 1,
+					Err(_) => return Err(GraphError::FindKeyError),
+				}
+			}
+		}
+
+		Ok(count)
 	}
 }
