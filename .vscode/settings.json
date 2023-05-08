@@ -1,9 +1,3 @@
 {
-  "rust-analyzer.linkedProjects": [
-    "./Cargo.toml",
-    "./icy/Cargo.toml",
-    "./icy/Cargo.toml",
-    "./icy/Cargo.toml",
-    "./icy/Cargo.toml"
-  ]
+  "rust-analyzer.linkedProjects": ["./Cargo.toml", "./icy/Cargo.toml"]
 }

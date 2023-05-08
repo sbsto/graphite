@@ -1,4 +1,4 @@
-use icy::{create_node_struct, Graph, IceNode, Serialize, Deserialize, xid};
+use icy::{create_node_struct, create_edge_struct, Graph, IceNode, Serialize, Deserialize, xid};
 use rayon::prelude::*;
 
 fn main() {
@@ -17,25 +17,31 @@ fn main() {
 		}
 	} 
 
+	graph.create_family_if_not_exists(stringify!(SomeNodeType)).unwrap();
+	graph.create_family_if_not_exists(stringify!(AnotherNodeType)).unwrap();
+
 	// create 100k of each node type and add them to the graph and time it
-	let start = std::time::Instant::now();
 
 	// graph.destroy_everything().unwrap();
+
+	let start = std::time::Instant::now();
 
 	let _ = (0..100_000).into_par_iter()
     .for_each(|_| {
 			let node1 = SomeNodeType::new(None, "some data".to_string(), "some mutable data".to_string());
 			let node2 = AnotherNodeType::new(None, "some data".to_string());
+
 			graph.add_node(node1).unwrap();
 			graph.add_node(node2).unwrap();
+			// graph.add_edge::<SomeNodeType>(id_1, id_2).unwrap();
     });
 
 	println!("time to add 200k nodes: {:?}", start.elapsed());
 
 	let nodes_num = graph.count_nodes().unwrap();
-	println!("nodes number: {}", nodes_num);
-	
-	println!("time to add 200k nodes and count them: {:?}", start.elapsed());
+	println!("nodes: {}", nodes_num);
+
+	graph.display().unwrap();
 
 	// graph.display().unwrap();
 }
