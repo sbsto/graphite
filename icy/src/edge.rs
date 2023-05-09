@@ -9,7 +9,7 @@ pub trait IceEdge: Serialize + for<'de> Deserialize<'de> + Clone {
 
 #[macro_export]
 macro_rules! create_edge_struct {
-	($struct_name:ident {
+	($graph:expr, $struct_name:ident {
 		$($field_name:ident: $field_type:ty),* $(,)?
 	}) => {
 		#[derive(Debug, Serialize, Deserialize, Clone)]
@@ -56,5 +56,7 @@ macro_rules! create_edge_struct {
 				stringify!($struct_name).to_string()
 			}
 		}
+
+		$graph.create_family_if_not_exists(stringify!($struct_name)).unwrap();
 	};
 }
