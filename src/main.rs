@@ -1,4 +1,4 @@
-use icy::{create_node_struct, create_edge_struct, Graph, IceNode, Serialize, Deserialize, xid, IceEdge};
+use graph::{create_node_struct, create_edge_struct, Graph, Node, Serialize, Deserialize, xid, Edge};
 use rayon::prelude::*;
 
 fn main() {

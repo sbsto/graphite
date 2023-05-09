@@ -5,8 +5,8 @@ use std::{string::FromUtf8Error, sync::Arc};
 use rocksdb::{TransactionDB, Options, Error as RocksError, ColumnFamilyDescriptor, TransactionDBOptions, DB, MultiThreaded, Transaction};
 use serde_json::Error as SerdeError;
 
-pub use node::IceNode;
-pub use edge::IceEdge;
+pub use node::Node;
+pub use edge::Edge;
 pub use serde::{Serialize, Deserialize};
 pub use xid;
 
@@ -120,7 +120,7 @@ impl Graph {
 
 	pub fn add_node<T>(&self, node: T) -> Result<T, GraphError>
 	where
-		T: IceNode
+		T: Node
 	{
     let db = Arc::clone(&self.db);
     let node_family_name = node.family_name();
@@ -137,7 +137,7 @@ impl Graph {
 	}
 
 	pub fn get_node<T>(&self, node_id: &str) -> Result<T, GraphError> 
-	where T: IceNode {
+	where T: Node {
     let db = Arc::clone(&self.db);
 		let node_family_name = node_id.split(":").next().ok_or(GraphError::ParseNodeIdError)?;
 		let node_family = db.cf_handle(&node_family_name).ok_or(GraphError::FindFamilyError)?;
@@ -153,7 +153,6 @@ impl Graph {
     }
 	}
 
-	// TODO: modify this method to remove the node from all the other nodes' neighbours
 	pub fn remove_node(&self, node_id: &str) -> Result<(), GraphError> {
 		let db = Arc::clone(&self.db);
 		let node_family_name = node_id.split(":").next().ok_or(GraphError::ParseNodeIdError)?;
@@ -165,7 +164,7 @@ impl Graph {
 		Ok(())
 	}
 
-	pub fn update_node<T: IceNode>(&self, node: &T) -> Result<(), GraphError> {
+	pub fn update_node<T: Node>(&self, node: &T) -> Result<(), GraphError> {
 		let db = Arc::clone(&self.db);
 		let node_family = node.family_name();
 		let node_family = db.cf_handle(&node_family).ok_or(GraphError::FindFamilyError)?;
@@ -176,7 +175,7 @@ impl Graph {
 	}
 
 	pub fn add_edge<T, S, R>(&self, edge: T, mut from_node: S, mut to_node: R) -> Result<(), GraphError> 
-	where T: IceEdge, S: IceNode, R: IceNode {
+	where T: Edge, S: Node, R: Node {
     let db = Arc::clone(&self.db);
     let edge_family_name = edge.family_name();
 		let edge_family = self.db.cf_handle(&edge_family_name).ok_or(GraphError::EdgeFamilyError)?;

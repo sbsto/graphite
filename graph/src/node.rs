@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-pub trait IceNode: Serialize + for<'de> Deserialize<'de> + Clone {
+pub trait Node: Serialize + for<'de> Deserialize<'de> + Clone {
 	fn id(&self) -> &str;
 	fn in_edge_ids(&self) -> Vec<String>;
 	fn out_edge_ids(&self) -> Vec<String>;
@@ -43,7 +43,7 @@ macro_rules! create_node_struct {
 			}
 		}
 
-		impl IceNode for $struct_name {
+		impl Node for $struct_name {
 			fn id(&self) -> &str {
 				&self.id
 			}

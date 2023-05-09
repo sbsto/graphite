@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-pub trait IceEdge: Serialize + for<'de> Deserialize<'de> + Clone {
+pub trait Edge: Serialize + for<'de> Deserialize<'de> + Clone {
 	fn id(&self) -> &str;
 	fn from_node_id(&self) -> &str;
 	fn to_node_id(&self) -> &str;
@@ -39,7 +39,7 @@ macro_rules! create_edge_struct {
 			}
 		}
 
-		impl IceEdge for $struct_name {
+		impl Edge for $struct_name {
 			fn id(&self) -> &str {
 				&self.id
 			}
