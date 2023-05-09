@@ -1,0 +1,24 @@
+nodes:
+  - name: SomeNodeType
+    fields:
+      - name: data
+        type: String
+      - name: other_data
+        type: String
+  - name: AnotherNodeType
+    fields:
+      - name: data
+        type: String
+      - name: tracked
+        type: bool
+        default: false
+
+edges:
+  - name: SomeEdgeType
+    # still need to implement connections
+    connections:
+      - from: SomeNodeType
+        to: AnotherNodeType
+    fields:
+      - name: weight
+        type: f64

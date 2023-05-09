@@ -1,12 +1,12 @@
 pub mod edge;
 pub mod node;
+pub mod generated;
 
 use std::{string::FromUtf8Error, sync::Arc};
 use rocksdb::{TransactionDB, Options, Error as RocksError, ColumnFamilyDescriptor, TransactionDBOptions, DB, MultiThreaded, Transaction};
 use serde_json::Error as SerdeError;
 
-pub use node::Node;
-pub use edge::Edge;
+pub use generated::*;
 pub use serde::{Serialize, Deserialize};
 pub use xid;
 
@@ -88,7 +88,7 @@ impl Graph {
 
     let mut cf_descriptors = Vec::new();
     for cf in cfs {
-        cf_descriptors.push(ColumnFamilyDescriptor::new(cf, Options::default()));
+			cf_descriptors.push(ColumnFamilyDescriptor::new(cf, Options::default()));
     }
 
     let db: TransactionDB<MultiThreaded> = match cf_descriptors.is_empty() {
@@ -98,7 +98,14 @@ impl Graph {
 
     let path = path.to_string();
 
-    Ok(Graph { db: Arc::new(db), path })
+		let graph = Graph { db: Arc::new(db), path };
+
+		let families = families();
+		for family in families {
+			graph.create_family_if_not_exists(family)?;
+		}
+
+    Ok(graph)
 	}
 
 	pub fn add_node<T>(&self, node: T) -> Result<T, GraphError>
