@@ -1,5 +1,3 @@
-pub mod edge;
-pub mod node;
 pub mod generated;
 
 use std::{string::FromUtf8Error, sync::Arc};
