@@ -21,15 +21,6 @@ macro_rules! create_edge_struct {
 		}
 
 		impl $struct_name {
-			pub fn new(id: Option<String>, $($field_name: $field_type,)*) -> Self {
-				Self {
-					id: format!(concat!(stringify!($struct_name), ":{}"), id.unwrap_or(xid::new().to_string())),
-					from_node_id: String,
-					to_node_id: String,
-					$($field_name),*,
-				}
-			}
-
 			pub fn new_between(id: Option<String>, from_node_id: &str, to_node_id: &str, $($field_name: $field_type,)*) -> Self {
 				Self {
 					id: format!(concat!(stringify!($struct_name), ":{}"), id.unwrap_or(xid::new().to_string())),

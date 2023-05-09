@@ -41,6 +41,7 @@ pub enum GraphError {
 	ReadNodeError(RocksError),
 	DeleteNodeError(RocksError),
 	UpdateNodeError(RocksError),
+	CreateEdgeError(RocksError),
 	DeleteError(RocksError),
 	FindFamiliesError(RocksError),
 	DbNotClosed,
@@ -74,6 +75,7 @@ impl std::fmt::Display for GraphError {
 			GraphError::ReadNodeError(error) => write!(f, "Error reading node: {}", error),
 			GraphError::UpdateNodeError(error) => write!(f, "Error updating node: {}", error),
 			GraphError::DeleteNodeError(error) => write!(f, "Error deleting node: {}", error),
+			GraphError::CreateEdgeError(error) => write!(f, "Error creating edge: {}", error),
 			GraphError::DeleteError(error) => write!(f, "Error deleting: {}", error),
 			GraphError::FindKeyError => write!(f, "Find key error"),
 			GraphError::OpenDbError(error) => write!(f, "Error opening database: {}", error),
@@ -173,18 +175,26 @@ impl Graph {
     Ok(())
 	}
 
-	// pub fn add_edge<T>(&self, edge: T) -> Result<(), GraphError> 
-	// where T: IceEdge {
-  //   let db = Arc::clone(&self.db);
-  //   let edge_family_name = edge.family_name();
+	pub fn add_edge<T, S, R>(&self, edge: T, mut from_node: S, mut to_node: R) -> Result<(), GraphError> 
+	where T: IceEdge, S: IceNode, R: IceNode {
+    let db = Arc::clone(&self.db);
+    let edge_family_name = edge.family_name();
+		let edge_family = self.db.cf_handle(&edge_family_name).ok_or(GraphError::EdgeFamilyError)?;
 
-	// 	let edge_family = self.db.cf_handle(&edge_family_name).ok_or(GraphError::EdgeFamilyError)?;
+		let txn = db.transaction();
+		txn.put_cf(&edge_family, edge.id(), serde_json::to_vec(&edge)?)
+			.map_err(|e| GraphError::CreateEdgeError(e))?;
 
-	// 	let txn = db.transaction();
-	// 	txn.put_cf(&edge_family, edge.id(), serde_json::to_vec(&edge)?)?;
-	// 	txn.commit()?;
-	// 	Ok(())
-	// }
+		from_node.add_out_edge_id(edge.id().to_string());
+		to_node.add_in_edge_id(edge.id().to_string());
+
+		self.update_node(&from_node)?;
+		self.update_node(&to_node)?;
+
+		txn.commit()
+			.map_err(|e| GraphError::CreateEdgeError(e))?;
+		Ok(())
+	}
 
 	// pub fn remove_edge<T>(&self, from_node_id: &str, to_node_id: &str) -> Result<(), GraphError>
 	// where T: IceNode {
