@@ -15,23 +15,6 @@ pub struct Graph {
 	path: String,
 }
 
-// pub trait GraphOperations {
-// 	fn create_family(&mut self, family_name: &str) -> Result<(), GraphError>;
-// }
-
-// impl GraphOperations for Graph {
-// 	fn create_family(&mut self, family_name: &str) -> Result<(), GraphError> {
-// 		// Check if the column family already exists
-// 		if self.db.cf_handle(family_name).is_none() {
-// 			let options = Options::default();
-// 			self.db
-// 				.create_cf(family_name, &options)
-// 				.map_err(|e| GraphError::CreateFamilyError(e))?;
-// 		}
-// 		Ok(())
-// 	}
-// }
-
 #[derive(Debug)]
 pub enum GraphError {
 	SerdeError(SerdeError),
