@@ -12,7 +12,6 @@ nodes:
       - name: tracked
         type: bool
         default: false
-
 edges:
   - name: SomeEdgeType
     # still need to implement connections
