@@ -4,7 +4,10 @@ use rocksdb::{
     ColumnFamilyDescriptor, Error as RocksError, MultiThreaded, Options, Transaction,
     TransactionDB, TransactionDBOptions, DB,
 };
-use serde_json::Error as SerdeError;
+
+use rmp_serde::{
+    decode::Error as DecodeError, encode::Error as EncodeError, Deserializer, Serializer,
+};
 use std::{string::FromUtf8Error, sync::Arc};
 
 pub use generated::*;
@@ -18,7 +21,8 @@ pub struct Graph {
 
 #[derive(Debug)]
 pub enum GraphError {
-    SerdeError(SerdeError),
+    EncodeError(EncodeError),
+    DecodeError(DecodeError),
     OpenDbError(RocksError),
     DestroyDbError(RocksError),
     CreateNodeError(RocksError),
@@ -39,9 +43,15 @@ pub enum GraphError {
     EdgeFamilyError,
 }
 
-impl From<SerdeError> for GraphError {
-    fn from(error: SerdeError) -> Self {
-        GraphError::SerdeError(error)
+impl From<EncodeError> for GraphError {
+    fn from(error: EncodeError) -> Self {
+        GraphError::EncodeError(error)
+    }
+}
+
+impl From<DecodeError> for GraphError {
+    fn from(error: DecodeError) -> Self {
+        GraphError::DecodeError(error)
     }
 }
 
@@ -54,7 +64,8 @@ impl From<FromUtf8Error> for GraphError {
 impl std::fmt::Display for GraphError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GraphError::SerdeError(error) => write!(f, "Serde error: {}", error),
+            GraphError::EncodeError(error) => write!(f, "Encoding error: {}", error),
+            GraphError::DecodeError(error) => write!(f, "Decoding error: {}", error),
             GraphError::CreateNodeError(error) => write!(f, "Error creating node: {}", error),
             GraphError::ReadNodeError(error) => write!(f, "Error reading node: {}", error),
             GraphError::UpdateNodeError(error) => write!(f, "Error updating node: {}", error),
@@ -130,8 +141,9 @@ impl Graph {
             .ok_or(GraphError::FindFamilyError)?;
 
         let txn: Transaction<TransactionDB<MultiThreaded>> = db.transaction();
-        txn.put_cf(&node_family, node.id(), serde_json::to_string(&node)?)
+        txn.put_cf(&node_family, node.id(), rmp_serde::to_vec(&node)?)
             .map_err(|e| GraphError::CreateNodeError(e))?;
+
         txn.commit().map_err(|e| GraphError::CreateNodeError(e))?;
         Ok(node)
     }
@@ -154,7 +166,7 @@ impl Graph {
 
         match value {
             Some(value) => {
-                let node_payload = serde_json::from_slice::<T>(&value)?;
+                let node_payload = rmp_serde::from_slice::<T>(&value)?;
                 Ok(node_payload)
             }
             None => Err(GraphError::FindKeyError),
@@ -185,7 +197,7 @@ impl Graph {
             .cf_handle(&node_family)
             .ok_or(GraphError::FindFamilyError)?;
 
-        let serialized_node = serde_json::to_vec(node)?;
+        let serialized_node = rmp_serde::to_vec(node)?;
         self.db
             .put_cf(&node_family, &node.id(), &serialized_node)
             .map_err(|e| GraphError::UpdateNodeError(e))?;
@@ -211,7 +223,7 @@ impl Graph {
             .ok_or(GraphError::EdgeFamilyError)?;
 
         let txn = db.transaction();
-        txn.put_cf(&edge_family, edge.id(), serde_json::to_vec(&edge)?)
+        txn.put_cf(&edge_family, edge.id(), rmp_serde::to_vec(&edge)?)
             .map_err(|e| GraphError::CreateEdgeError(e))?;
 
         from_node.add_out_edge_id(edge.id().to_string());
@@ -290,7 +302,10 @@ impl Graph {
         Ok(())
     }
 
-    pub fn display(&self) -> Result<(), GraphError> {
+    pub fn display_family_head<T>(&self) -> Result<(), GraphError>
+    where
+        T: Node,
+    {
         let node_families = DB::list_cf(&Options::default(), &self.path)
             .map_err(|e| GraphError::FindFamiliesError(e))?;
         for node_family_name in node_families {
@@ -308,11 +323,10 @@ impl Graph {
             for record in records.take(5) {
                 match record {
                     Ok((key, value)) => {
-                        let key_str =
-                            String::from_utf8(key.to_vec()).map_err(GraphError::ParseUtf8Error)?;
-                        let value_str = String::from_utf8(value.to_vec())
-                            .map_err(GraphError::ParseUtf8Error)?;
-                        println!("{}: {}", key_str, value_str);
+                        let key_str = String::from_utf8(key.to_vec())
+                            .map_err(|e| GraphError::ParseUtf8Error(e))?;
+                        let value_str: T = rmp_serde::from_slice(&value)?;
+                        println!("{}: {:?}", key_str, value_str)
                     }
                     Err(_) => return Err(GraphError::FindKeyError),
                 }
@@ -343,5 +357,11 @@ impl Graph {
         }
 
         Ok(count)
+    }
+
+    pub fn get_type_name<T>(&self) -> String {
+        let type_name = std::any::type_name::<T>();
+        let type_name = type_name.split("::").last().unwrap();
+        type_name.to_string()
     }
 }

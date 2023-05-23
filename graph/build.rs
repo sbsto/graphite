@@ -48,7 +48,7 @@ fn main() {
     writeln!(output, "{}", imports_impl.to_string()).unwrap();
 
     let node_impl = quote! {
-        pub trait Node: Serialize + for<'de> Deserialize<'de> + Clone {
+        pub trait Node: Serialize + for<'de> Deserialize<'de> + Clone + std::fmt::Debug {
             fn id(&self) -> &str;
             fn in_edge_ids(&self) -> Vec<String>;
             fn out_edge_ids(&self) -> Vec<String>;
@@ -61,7 +61,7 @@ fn main() {
     };
 
     let edge_impl = quote! {
-        pub trait Edge: Serialize + for<'de> Deserialize<'de> + Clone {
+        pub trait Edge: Serialize + for<'de> Deserialize<'de> + Clone + std::fmt::Debug {
             fn id(&self) -> &str;
             fn from_node_id(&self) -> &str;
             fn to_node_id(&self) -> &str;
@@ -214,6 +214,7 @@ fn main() {
         };
         writeln!(output, "{}", edge_impl.to_string()).unwrap();
     }
+
     let families_impl = quote! {
         pub fn families() -> Vec<&'static str> {
             vec![#( #families ),*]
