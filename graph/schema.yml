@@ -1,22 +1,25 @@
 nodes:
-  - name: SomeNodeType
+  - name: Song
     fields:
-      - name: data
+      - name: title
         type: String
-      - name: other_data
-        type: String
-  - name: AnotherNodeType
+  - name: Artist
     fields:
-      - name: data
+      - name: name
         type: String
-      - name: tracked
-        type: bool
+  - name: Album
+    fields:
+      - name: title
+        type: String
 edges:
-  - name: SomeEdgeType
+  - name: By
     connections:
-      - from: SomeNodeType
-        to: AnotherNodeType
-        name: FirstConnectionType
+      - from: Song
+        to: Artist
+        name: SongIsBy
+      - from: Album
+        to: Artist
+        name: AlbumIsBy
     fields:
       - name: weight
         type: f64

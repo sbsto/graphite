@@ -90,7 +90,9 @@ impl std::fmt::Display for GraphError {
 
 impl Graph {
     pub fn new(path: &str) -> Result<Graph, GraphError> {
-        let options = Options::default();
+        let mut options = Options::default();
+        options.create_if_missing(true);
+
         let txn_db_options = TransactionDBOptions::default();
 
         let cfs = match DB::list_cf(&options, path) {
@@ -206,12 +208,7 @@ impl Graph {
         Ok(())
     }
 
-    pub fn add_edge<T, S, R>(
-        &self,
-        edge: T,
-        mut from_node: S,
-        mut to_node: R,
-    ) -> Result<(), GraphError>
+    pub fn add_edge<T, S, R>(&self, edge: T) -> Result<(), GraphError>
     where
         T: Edge,
         S: Node,
@@ -231,6 +228,9 @@ impl Graph {
             rmp_serde::to_vec(&edge)?,
         )
         .map_err(GraphError::CreateEdgeError)?;
+
+        let connection = edge.connection();
+        from_node.add_out_connection(connection.clone());
 
         from_node.add_out_edge_id(edge.id().to_string());
         to_node.add_in_edge_id(edge.id().to_string());

@@ -75,17 +75,16 @@ fn main() {
                             fn family_name(&self) -> String;
             }
 
-            pub trait EdgeConnection: Serialize + for<'de> Deserialize<'de> + Clone + std::fmt::Debug {
-                        }
+            pub trait EdgeConnection: Serialize + for<'de> Deserialize<'de> + Clone + std::fmt::Debug {}
 
             pub trait Edge: Serialize + for<'de> Deserialize<'de> + Clone + std::fmt::Debug {
-                            type Id: EdgeId;
-                            type Connection: EdgeConnection;
+                type Id: EdgeId;
+                type Connection: EdgeConnection;
 
-                            fn id(&self) -> &Self::Id;
-                            fn connection(&self) -> &Self::Connection;
-                            fn family_name(&self) -> String;
-                        }
+                fn id(&self) -> &Self::Id;
+                fn connection(&self) -> &Self::Connection;
+                fn family_name(&self) -> String;
+            }
     };
 
     writeln!(output, "{}", node_impl).unwrap();
@@ -113,80 +112,80 @@ fn main() {
             pub struct #struct_name_id(String);
 
             impl NodeId for #struct_name_id {
-                                fn new (id: Option<String>) -> Self {
-                                    Self(format!(concat!(stringify!(#struct_name), ":{}"), id.unwrap_or_else(|| xid::new().to_string())))
-                                }
+                fn new (id: Option<String>) -> Self {
+                    Self(format!(concat!(stringify!(#struct_name), ":{}"), id.unwrap_or_else(|| xid::new().to_string())))
+                }
 
                 fn to_string(&self) -> String {
                     self.0.clone()
                 }
 
-                                fn family_name(&self) -> String {
-                                    stringify!(#struct_name).to_string()
-                                }
+                fn family_name(&self) -> String {
+                    stringify!(#struct_name).to_string()
+                }
             }
 
             #[derive(Debug, Serialize, Deserialize, Clone)]
             pub struct #struct_name {
-                    id: #struct_name_id,
-                    in_edge_ids: Vec<String>,
-                    out_edge_ids: Vec<String>,
-                    #( #field_idents: #field_types, )*
+                id: #struct_name_id,
+                in_edge_ids: Vec<String>,
+                out_edge_ids: Vec<String>,
+                #( #field_idents: #field_types, )*
             }
 
             impl #struct_name {
-                    pub fn new(id: Option<String>, #( #field_idents: #field_types, )*) -> Self {
-                            Self {
-                                    id: #struct_name_id(format!(concat!(stringify!(#struct_name), ":{}"), id.unwrap_or(xid::new().to_string()))),
-                                    in_edge_ids: Vec::new(),
-                                    out_edge_ids: Vec::new(),
-                                    #( #field_idents ),*,
-                            }
+                pub fn new(id: Option<String>, #( #field_idents: #field_types, )*) -> Self {
+                    Self {
+                        id: #struct_name_id(format!(concat!(stringify!(#struct_name), ":{}"), id.unwrap_or(xid::new().to_string()))),
+                        in_edge_ids: Vec::new(),
+                        out_edge_ids: Vec::new(),
+                        #( #field_idents ),*,
                     }
+                }
             }
 
             impl std::str::FromStr for #struct_name {
-                    type Err = serde_json::Error;
+                type Err = serde_json::Error;
 
-                    fn from_str(s: &str) -> Result<Self, Self::Err> {
-                            serde_json::from_str::<Self>(s)
-                    }
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    serde_json::from_str::<Self>(s)
+                }
             }
 
             impl Node for #struct_name {
-                                        type Id = #struct_name_id;
+                type Id = #struct_name_id;
 
-                                        fn id(&self) -> &#struct_name_id {
-                                            &self.id
-                                        }
+                fn id(&self) -> &#struct_name_id {
+                    &self.id
+                }
 
-                    fn in_edge_ids(&self) -> Vec<String> {
-                            self.in_edge_ids.clone()
-                    }
+                fn in_edge_ids(&self) -> Vec<String> {
+                    self.in_edge_ids.clone()
+                }
 
-                    fn add_in_edge_id(&mut self, edge_id: String) {
-                            self.in_edge_ids.push(edge_id);
-                    }
+                fn add_in_edge_id(&mut self, edge_id: String) {
+                    self.in_edge_ids.push(edge_id);
+                }
 
-                    fn remove_in_edge_id(&mut self, edge_id: &str) {
-                            self.in_edge_ids.retain(|x| x != edge_id);
-                    }
+                fn remove_in_edge_id(&mut self, edge_id: &str) {
+                    self.in_edge_ids.retain(|x| x != edge_id);
+                }
 
-                    fn out_edge_ids(&self) -> Vec<String> {
-                            self.out_edge_ids.clone()
-                    }
+                fn out_edge_ids(&self) -> Vec<String> {
+                    self.out_edge_ids.clone()
+                }
 
-                    fn add_out_edge_id(&mut self, edge_id: String) {
-                            self.out_edge_ids.push(edge_id);
-                    }
+                fn add_out_edge_id(&mut self, edge_id: String) {
+                    self.out_edge_ids.push(edge_id);
+                }
 
-                    fn remove_out_edge_id(&mut self, edge_id: &str) {
-                            self.out_edge_ids.retain(|x| x != edge_id);
-                    }
+                fn remove_out_edge_id(&mut self, edge_id: &str) {
+                    self.out_edge_ids.retain(|x| x != edge_id);
+                }
 
-                    fn family_name(&self) -> String {
-                            stringify!(#struct_name).to_string()
-                    }
+                fn family_name(&self) -> String {
+                    stringify!(#struct_name).to_string()
+                }
             }
         };
 
@@ -235,69 +234,69 @@ fn main() {
             #[derive(Debug, Serialize, Deserialize, Clone)]
             pub struct #struct_name_id(String);
 
-                        impl EdgeId for #struct_name_id {
-                            fn to_string(&self) -> String {
-                                                            self.0.clone()
-                            }
+            impl EdgeId for #struct_name_id {
+                fn to_string(&self) -> String {
+                    self.0.clone()
+                }
 
-                                                        fn family_name(&self) -> String {
-                                                                stringify!(#struct_name).to_string()
-                                                        }
-                        }
+                fn family_name(&self) -> String {
+                    stringify!(#struct_name).to_string()
+                }
+            }
 
             #[derive(Debug, Serialize, Deserialize, Clone)]
-                                pub enum #struct_name_connection {
-                                        #( #connection_variants ),*
-                                }
+            pub enum #struct_name_connection {
+                    #( #connection_variants ),*
+            }
 
-                                impl EdgeConnection for #struct_name_connection {}
+            impl EdgeConnection for #struct_name_connection {}
 
 
 
             #[derive(Debug, Serialize, Deserialize, Clone)]
             pub struct #struct_name {
-                            id: #struct_name_id,
-                            connection: #struct_name_connection,
-                            #( #field_idents: #field_types, )*
-                        }
+                id: #struct_name_id,
+                connection: #struct_name_connection,
+                #( #field_idents: #field_types, )*
+            }
 
             impl #struct_name {
-                            pub fn new(id: Option<String>, connection: #struct_name_connection, #( #field_idents: #field_types, )*) -> Self {
-                                Self {
-                                        id: #struct_name_id(format!(concat!(stringify!(#struct_name), ":{}"), id.unwrap_or_else(|| xid::new().to_string()))),
-                                        connection,
-                                        #( #field_idents ),*
-                                }
-                            }
+                pub fn new(id: Option<String>, connection: #struct_name_connection, #( #field_idents: #field_types, )*) -> Self {
+                    Self {
+                        id: #struct_name_id(format!(concat!(stringify!(#struct_name), ":{}"), id.unwrap_or_else(|| xid::new().to_string()))),
+                        connection,
+                        #( #field_idents ),*
+                    }
+                }
 
-                            pub fn id(&self) -> &#struct_name_id {
-                                &self.id
-                            }
+                pub fn id(&self) -> &#struct_name_id {
+                    &self.id
+                }
             }
 
             impl std::str::FromStr for #struct_name {
-                            type Err = serde_json::Error;
+                type Err = serde_json::Error;
 
-                            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                                serde_json::from_str::<Self>(s)
-                            }
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    serde_json::from_str::<Self>(s)
+                }
             }
 
             impl Edge for #struct_name {
-                            type Id = #struct_name_id;
-                            type Connection = #struct_name_connection;
+                type Id = #struct_name_id;
+                type Connection = #struct_name_connection;
 
-                            fn id(&self) -> &#struct_name_id {
-                                    &self.id
-                            }
+                fn id(&self) -> &#struct_name_id {
+                    &self.id
+                }
 
-                            fn connection(&self) -> &Self::Connection {
-                                &self.connection
-                            }
+                fn connection(&self) -> &Self::Connection {
+                    &self.connection
+                }
 
-                            fn family_name(&self) -> String {
-                                    stringify!(#struct_name).to_string()
-                            }
+                fn family_name(&self) -> String {
+                    stringify!(#struct_name).to_string()
+                }
             }
         };
 
@@ -305,9 +304,9 @@ fn main() {
     }
 
     let families_impl = quote! {
-            pub fn families() -> Vec<&'static str> {
-                vec![#( #families ),*]
-            }
+        pub fn families() -> Vec<&'static str> {
+        vec![#( #families ),*]
+        }
     };
 
     writeln!(output, "{}", families_impl).unwrap();

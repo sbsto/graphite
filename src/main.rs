@@ -1,34 +1,25 @@
-use graph::{
-    AnotherNodeType, AnotherNodeTypeId, Edge, Graph, Node, NodeId, SomeEdgeType,
-    SomeEdgeTypeConnection, SomeNodeType, SomeNodeTypeId,
-};
+use graph::{Album, Artist, By, ByConnection, Graph, Node, Song};
 use rayon::prelude::*;
 
 fn main() {
-    let graph = Graph::new("/var/lib/rocksdb/dev").unwrap();
+    let graph = Graph::new("/Users/sambrownstone/graphite_data").unwrap();
 
     let start = std::time::Instant::now();
 
     (0..1000000).into_par_iter().for_each(|_| {
-        let node1_initial = SomeNodeType::new(
-            None,
-            "some data".to_string(),
-            "some mutable data".to_string(),
-        );
+        let song = Song::new(None, "Matter".to_string());
+        let artist = Artist::new(None, "Family Stereo".to_string());
+        let album = Album::new(None, "Matter".to_string());
 
-        let node2_initial = AnotherNodeType::new(None, "some data".to_string(), false);
+        let song_is_by_artist_connection =
+            ByConnection::SongIsBy(song.id().clone(), artist.id().clone());
+        let album_is_by_artist_connection =
+            ByConnection::AlbumIsBy(album.id().clone(), artist.id().clone());
 
-        let connection = SomeEdgeTypeConnections::FirstConnectionType(
-            SomeNodeTypeId::new(Some(node1_initial.id().to_string())),
-            AnotherNodeTypeId::new(Some(node2_initial.id().to_string())),
-        );
+        let song_is_by_artist_edge = By::new(None, song_is_by_artist, 0.5);
+        let album_is_by_artist_edge = By::new(None, album_is_by_artist, 0.5);
 
-        let edge = SomeEdgeType::new(None, connection, 0.5);
-
-        let node_1 = graph.add_node(node1_initial).unwrap();
-        let node_2 = graph.add_node(node2_initial).unwrap();
-
-        graph.add_edge(edge, node_1, node_2).unwrap();
+        graph.add_edge(song_is_by_artist_edge).unwrap();
     });
 
     println!("time to add 2m nodes and 1m edges: {:?}", start.elapsed());
