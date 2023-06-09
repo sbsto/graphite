@@ -5,9 +5,7 @@ use rocksdb::{
     TransactionDB, TransactionDBOptions, DB,
 };
 
-use rmp_serde::{
-    decode::Error as DecodeError, encode::Error as EncodeError, Deserializer, Serializer,
-};
+use rmp_serde::{decode::Error as DecodeError, encode::Error as EncodeError};
 use std::{string::FromUtf8Error, sync::Arc};
 
 pub use generated::*;
@@ -107,10 +105,10 @@ impl Graph {
 
         let db: TransactionDB<MultiThreaded> = match cf_descriptors.is_empty() {
             true => TransactionDB::open(&options, &txn_db_options, path)
-                .map_err(|e| GraphError::OpenDbError(e))?,
+                .map_err(GraphError::OpenDbError)?,
             false => {
                 TransactionDB::open_cf_descriptors(&options, &txn_db_options, path, cf_descriptors)
-                    .map_err(|e| GraphError::OpenDbError(e))?
+                    .map_err(GraphError::OpenDbError)?
             }
         };
 
@@ -141,28 +139,32 @@ impl Graph {
             .ok_or(GraphError::FindFamilyError)?;
 
         let txn: Transaction<TransactionDB<MultiThreaded>> = db.transaction();
-        txn.put_cf(&node_family, node.id(), rmp_serde::to_vec(&node)?)
-            .map_err(|e| GraphError::CreateNodeError(e))?;
+        txn.put_cf(
+            &node_family,
+            node.id().to_string(),
+            rmp_serde::to_vec(&node)?,
+        )
+        .map_err(GraphError::CreateNodeError)?;
 
-        txn.commit().map_err(|e| GraphError::CreateNodeError(e))?;
+        txn.commit().map_err(GraphError::CreateNodeError)?;
         Ok(node)
     }
 
-    pub fn get_node<T>(&self, node_id: &str) -> Result<T, GraphError>
+    pub fn get_node<T>(&self, node_id: String) -> Result<T, GraphError>
     where
         T: Node,
     {
         let db = Arc::clone(&self.db);
         let node_family_name = node_id
-            .split(":")
+            .split(':')
             .next()
             .ok_or(GraphError::ParseNodeIdError)?;
         let node_family = db
-            .cf_handle(&node_family_name)
+            .cf_handle(node_family_name)
             .ok_or(GraphError::FindFamilyError)?;
         let value = db
             .get_cf(&node_family, node_id)
-            .map_err(|e| GraphError::ReadNodeError(e))?;
+            .map_err(GraphError::ReadNodeError)?;
 
         match value {
             Some(value) => {
@@ -176,17 +178,17 @@ impl Graph {
     pub fn remove_node(&self, node_id: &str) -> Result<(), GraphError> {
         let db = Arc::clone(&self.db);
         let node_family_name = node_id
-            .split(":")
+            .split(':')
             .next()
             .ok_or(GraphError::ParseNodeIdError)?;
         let node_family = db
-            .cf_handle(&node_family_name)
+            .cf_handle(node_family_name)
             .ok_or(GraphError::FindFamilyError)?;
 
         let txn = db.transaction();
-        txn.delete_cf(&node_family, &node_id)
-            .map_err(|e| GraphError::DeleteNodeError(e))?;
-        txn.commit().map_err(|e| GraphError::DeleteNodeError(e))?;
+        txn.delete_cf(&node_family, node_id)
+            .map_err(GraphError::DeleteNodeError)?;
+        txn.commit().map_err(GraphError::DeleteNodeError)?;
         Ok(())
     }
 
@@ -199,8 +201,8 @@ impl Graph {
 
         let serialized_node = rmp_serde::to_vec(node)?;
         self.db
-            .put_cf(&node_family, &node.id(), &serialized_node)
-            .map_err(|e| GraphError::UpdateNodeError(e))?;
+            .put_cf(&node_family, node.id().to_string(), serialized_node)
+            .map_err(GraphError::UpdateNodeError)?;
         Ok(())
     }
 
@@ -223,8 +225,12 @@ impl Graph {
             .ok_or(GraphError::EdgeFamilyError)?;
 
         let txn = db.transaction();
-        txn.put_cf(&edge_family, edge.id(), rmp_serde::to_vec(&edge)?)
-            .map_err(|e| GraphError::CreateEdgeError(e))?;
+        txn.put_cf(
+            &edge_family,
+            edge.id().to_string(),
+            rmp_serde::to_vec(&edge)?,
+        )
+        .map_err(GraphError::CreateEdgeError)?;
 
         from_node.add_out_edge_id(edge.id().to_string());
         to_node.add_in_edge_id(edge.id().to_string());
@@ -232,34 +238,56 @@ impl Graph {
         self.update_node(&from_node)?;
         self.update_node(&to_node)?;
 
-        txn.commit().map_err(|e| GraphError::CreateEdgeError(e))?;
+        txn.commit().map_err(GraphError::CreateEdgeError)?;
         Ok(())
     }
 
-    // pub fn remove_edge<T>(&self, from_node_id: &str, to_node_id: &str) -> Result<(), GraphError>
-    // where T: IceNode {
-    // 	let node_family_name = from_node_id.split(":").next().ok_or(GraphError::ParseNodeIdError)?;
-    // 	let node_family = self.db.cf_handle(&node_family_name).ok_or(GraphError::FindFamilyError)?;
+    pub fn get_edge<T, R>(&self, edge_id: T) -> Result<R, GraphError>
+    where
+        T: EdgeId,
+        R: Edge,
+    {
+        let db = Arc::clone(&self.db);
+        let edge_family_name = edge_id.family_name();
+        let edge_family = db
+            .cf_handle(&edge_family_name)
+            .ok_or(GraphError::EdgeFamilyError)?;
 
-    // 	let node_payload: Result<T, GraphError> = match self.db.get_cf(&node_family, &from_node_id) {
-    // 			Ok(Some(value)) => {
-    // 				let mut node_payload = serde_json::from_slice::<T>(&value)?;
-    // 				let index = node_payload.nbs()
-    // 					.iter()
-    // 					.position(|x| *x == to_node_id.to_string()).ok_or(GraphError::NeighbourIndexError)?;
+        let value = db
+            .get_cf(&edge_family, edge_id.to_string())
+            .map_err(GraphError::ReadNodeError)?;
 
-    // 				node_payload.nbs_mut().remove(index);
-    // 				Ok(node_payload)
-    // 			}
-    // 			Ok(None) => Err(GraphError::FindKeyError),
-    // 			Err(e) => Err(GraphError::RocksError(e)),
-    // 	};
+        match value {
+            Some(value) => {
+                let edge_payload = rmp_serde::from_slice::<R>(&value)?;
+                Ok(edge_payload)
+            }
+            None => Err(GraphError::FindKeyError),
+        }
+    }
 
-    // 	let txn = self.db.transaction();
-    // 	txn.put_cf(&node_family, &from_node_id, serde_json::to_vec(&node_payload?)?)?;
-    // 	txn.commit()?;
-    // 	Ok(())
-    // }
+    pub fn remove_edge<T, R>(self, edge_id: T) -> Result<(), GraphError>
+    where
+        T: EdgeId,
+        R: Edge,
+    {
+        let db = Arc::clone(&self.db);
+        let edge_family_name = edge_id.family_name();
+        let edge_family = self
+            .db
+            .cf_handle(&edge_family_name)
+            .ok_or(GraphError::EdgeFamilyError)?;
+
+        let edge = self.get_edge::<T, R>(edge_id)?;
+        let from_node_id = edge.connection();
+
+        let txn = db.transaction();
+
+        txn.delete_cf(&edge_family, edge.id().to_string())
+            .map_err(GraphError::DeleteError)?;
+        txn.commit().map_err(GraphError::DeleteError)?;
+        Ok(())
+    }
 
     // pub fn get_adjacents<T>(&self, node_id: &str) -> Result<Vec<String>, GraphError>
     // where T: IceNode {
@@ -277,25 +305,25 @@ impl Graph {
     // 	Ok(node_payload?.nbs().to_vec())
     // }
 
-    pub fn create_family_if_not_exists(&self, family_name: &str) -> Result<(), GraphError> {
+    fn create_family_if_not_exists(&self, family_name: &str) -> Result<(), GraphError> {
         let db = &self.db;
         if db.cf_handle(family_name).is_none() {
             let options = Options::default();
             db.create_cf(family_name, &options)
-                .map_err(|e| GraphError::CreateFamilyError(e))?;
+                .map_err(GraphError::CreateFamilyError)?;
         }
         Ok(())
     }
 
     pub fn destroy_everything(&self) -> Result<(), GraphError> {
-        let families = DB::list_cf(&Options::default(), &self.path)
-            .map_err(|e| GraphError::FindFamiliesError(e))?;
+        let families =
+            DB::list_cf(&Options::default(), &self.path).map_err(GraphError::FindFamiliesError)?;
 
         for family_name in families {
             if family_name != "default" {
                 self.db
                     .drop_cf(&family_name)
-                    .map_err(|e| GraphError::DeleteError(e))?;
+                    .map_err(GraphError::DeleteError)?;
             }
         }
 
@@ -306,8 +334,8 @@ impl Graph {
     where
         T: Node,
     {
-        let node_families = DB::list_cf(&Options::default(), &self.path)
-            .map_err(|e| GraphError::FindFamiliesError(e))?;
+        let node_families =
+            DB::list_cf(&Options::default(), &self.path).map_err(GraphError::FindFamiliesError)?;
         for node_family_name in node_families {
             let node_family = self
                 .db
@@ -323,8 +351,8 @@ impl Graph {
             for record in records.take(5) {
                 match record {
                     Ok((key, value)) => {
-                        let key_str = String::from_utf8(key.to_vec())
-                            .map_err(|e| GraphError::ParseUtf8Error(e))?;
+                        let key_str =
+                            String::from_utf8(key.to_vec()).map_err(GraphError::ParseUtf8Error)?;
                         let value_str: T = rmp_serde::from_slice(&value)?;
                         println!("{}: {:?}", key_str, value_str)
                     }
@@ -337,8 +365,8 @@ impl Graph {
     }
 
     pub fn count_nodes(&self) -> Result<usize, GraphError> {
-        let families = DB::list_cf(&Options::default(), &self.path)
-            .map_err(|e| GraphError::FindFamiliesError(e))?;
+        let families =
+            DB::list_cf(&Options::default(), &self.path).map_err(GraphError::FindFamiliesError)?;
         let mut count = 0;
 
         for family_name in families {
