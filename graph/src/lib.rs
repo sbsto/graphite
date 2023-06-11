@@ -208,39 +208,39 @@ impl Graph {
         Ok(())
     }
 
-    pub fn add_edge<T, S, R>(&self, edge: T) -> Result<(), GraphError>
-    where
-        T: Edge,
-        S: Node,
-        R: Node,
-    {
-        let db = Arc::clone(&self.db);
-        let edge_family_name = edge.family_name();
-        let edge_family = self
-            .db
-            .cf_handle(&edge_family_name)
-            .ok_or(GraphError::EdgeFamilyError)?;
+    // pub fn add_edge<T, S, R>(&self, edge: T) -> Result<(), GraphError>
+    // where
+    //     T: Edge,
+    //     S: Node,
+    //     R: Node,
+    // {
+    //     let db = Arc::clone(&self.db);
+    //     let edge_family_name = edge.family_name();
+    //     let edge_family = self
+    //         .db
+    //         .cf_handle(&edge_family_name)
+    //         .ok_or(GraphError::EdgeFamilyError)?;
 
-        let txn = db.transaction();
-        txn.put_cf(
-            &edge_family,
-            edge.id().to_string(),
-            rmp_serde::to_vec(&edge)?,
-        )
-        .map_err(GraphError::CreateEdgeError)?;
+    //     let txn = db.transaction();
+    //     txn.put_cf(
+    //         &edge_family,
+    //         edge.id().to_string(),
+    //         rmp_serde::to_vec(&edge)?,
+    //     )
+    //     .map_err(GraphError::CreateEdgeError)?;
 
-        let connection = edge.connection();
-        from_node.add_out_connection(connection.clone());
+    //     let connection = edge.connection();
+    //     from_node.add_out_connection(connection.clone());
 
-        from_node.add_out_edge_id(edge.id().to_string());
-        to_node.add_in_edge_id(edge.id().to_string());
+    //     from_node.add_out_edge_id(edge.id().to_string());
+    //     to_node.add_in_edge_id(edge.id().to_string());
 
-        self.update_node(&from_node)?;
-        self.update_node(&to_node)?;
+    //     self.update_node(&from_node)?;
+    //     self.update_node(&to_node)?;
 
-        txn.commit().map_err(GraphError::CreateEdgeError)?;
-        Ok(())
-    }
+    //     txn.commit().map_err(GraphError::CreateEdgeError)?;
+    //     Ok(())
+    // }
 
     pub fn get_edge<T, R>(&self, edge_id: T) -> Result<R, GraphError>
     where
